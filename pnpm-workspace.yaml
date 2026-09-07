@@ -3,6 +3,6 @@ allowBuilds:
   unrs-resolver: true
   prisma: true
   '@prisma/engines': true
-  esbuild: true
+  esbuild: false
   msgpackr-extract: false
   workerd: false
