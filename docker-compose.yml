@@ -2,6 +2,8 @@ services:
   app:
     build: .
     container_name: knowledge-manager-app
+    environment:
+      DATABASE_URL: ${DATABASE_URL}  # .env に書かれた DATABASE_URL を使う
     volumes:
       - .:/app                      # ソースコードをマウント
       - node_modules:/app/node_modules  # node_modules は名前付きボリュームで高速化
@@ -9,6 +11,19 @@ services:
     ports:
       - "3000:3000"
     command: sleep infinity         # Dev Container 用に待機させる
+    depends_on:
+      - db                          # db を先に起動する
+
+  db:
+    image: postgres:18
+    container_name: knowledge-manager-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql  # データを永続化(18+ は /data を付けない)
 
 volumes:
   node_modules:
+  db_data:
