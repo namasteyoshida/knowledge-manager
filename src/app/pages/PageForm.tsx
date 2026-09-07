@@ -2,14 +2,18 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { createPage } from "./actions";
+import { createPage, updatePage } from "./actions";
 
 type User = { id: string; name: string };
 
-export function PageForm({ users }: { users: User[] }) {
+type Props =
+  | { mode: "create"; users: User[] }
+  | { mode: "edit"; pageId: string; title: string; initialContent: string; users: User[] };
+
+export function PageForm(props: Props) {
   const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [title, setTitle] = useState(props.mode === "edit" ? props.title : "");
+  const [content, setContent] = useState(props.mode === "edit" ? props.initialContent : "");
   const [authorId, setAuthorId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -19,8 +23,13 @@ export function PageForm({ users }: { users: User[] }) {
     setError(null);
     setLoading(true);
     try {
-      const page = await createPage(title, content, authorId);
-      router.push(`/pages/${page.id}`);
+      if (props.mode === "create") {
+        const page = await createPage(title, content, authorId);
+        router.push(`/pages/${page.id}`);
+      } else {
+        await updatePage(props.pageId, content, authorId);
+        router.push(`/pages/${props.pageId}`);
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -30,12 +39,16 @@ export function PageForm({ users }: { users: User[] }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="記事のタイトル"
-        className="rounded-md border border-gray-300 px-3 py-2"
-      />
+      {props.mode === "create" ? (
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="記事のタイトル"
+          className="rounded-md border border-gray-300 px-3 py-2"
+        />
+      ) : (
+        <p className="text-lg font-semibold text-gray-900">{props.title}</p>
+      )}
 
       <select
         value={authorId}
@@ -43,7 +56,7 @@ export function PageForm({ users }: { users: User[] }) {
         className="rounded-md border border-gray-300 px-3 py-2"
       >
         <option value="">著者を選択</option>
-        {users.map((u) => (
+        {props.users.map((u) => (
           <option key={u.id} value={u.id}>{u.name}</option>
         ))}
       </select>
