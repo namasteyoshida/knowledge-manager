@@ -1,4 +1,3 @@
-// app/pages/page.tsx
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
@@ -16,24 +15,40 @@ export default async function PageList() {
   });
 
   return (
-    <div style={{ padding: 24 }}>
-      <h1>記事一覧</h1>
-      <ul style={{ listStyle: "none", padding: 0 }}>
+    <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-gray-900">記事一覧</h1>
+        <Link
+          href="/pages/new"
+          className="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700"
+        >
+          + 新規作成
+        </Link>
+      </div>
+
+      <ul className="flex flex-col gap-3">
         {pages.map((page) => {
           const latestRevision = page.revisions[0];
           return (
-            <li key={page.id} style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <Link href={`/pages/${page.id}`}>
-                <p style={{ fontWeight: 600, margin: 0 }}>{page.title}</p>
+            <li key={page.id}>
+              <Link
+                href={`/pages/${page.id}`}
+                className="block rounded-lg border border-gray-200 p-4 transition hover:border-gray-300 hover:bg-gray-50"
+              >
+                <p className="font-medium text-gray-900">{page.title}</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  {latestRevision?.author.name ?? "不明"}・
+                  {page.updatedAt.toLocaleDateString("ja-JP")}に更新
+                </p>
               </Link>
-              <p style={{ fontSize: 13, color: "#666", margin: "4px 0 0" }}>
-                {latestRevision?.author.name ?? "不明"}・
-                {page.updatedAt.toLocaleDateString("ja-JP")}に更新
-              </p>
             </li>
           );
         })}
       </ul>
+
+      {pages.length === 0 && (
+        <p className="text-sm text-gray-500">まだ記事がありません。</p>
+      )}
     </div>
   );
 }
