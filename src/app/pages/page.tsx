@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { SearchBox } from "./SearchBox";
 
 export default async function PageList() {
   const pages = await prisma.page.findMany({
@@ -24,6 +25,10 @@ export default async function PageList() {
         >
           + 新規作成
         </Link>
+      </div>
+
+      <div className="mb-6">
+        <SearchBox />
       </div>
 
       <ul className="flex flex-col gap-3">
