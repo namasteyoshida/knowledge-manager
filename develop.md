@@ -123,3 +123,23 @@
 - 入力欄の縦幅調整は実装によるものではなく、ブラウザ標準の`<textarea>`が持つ`resize: both`のデフォルト挙動によるものだった
 - ボタン幅の変化は、Tailwindのpreflight(リセットCSS)とブラウザ標準の`<button>`余白の適用状態の違いによるものと推測
 - Safari/Chromeでの見た目の差は、開発サーバー再起動後もSafari側のタブが古いCSSをキャッシュしたままだったことが原因。「①ブラウザキャッシュ→②開発サーバー(`.next`)キャッシュ→③Prisma Clientの再生成」の順に疑うと切り分けが効率的、という教訓を得た
+
+### feature/search
+**メインロジック**
+- 検索ボックス(SearchBox.tsx)はClient Componentとして実装し、useStateで入力値を保持、送信時にrouter.push(/pages/search?q=${encodeURIComponent(query)})で検索結果ページへ遷移する設計にした
+- 検索結果自体の取得・表示はServer Component(search/page.tsx)側で行い、URLのクエリパラメータ(searchParams)経由で検索キーワードを受け取る構成。これにより、入力操作(Client Component)と実際のデータ取得(Server Component)の役割を分離している
+- 検索条件はOR: [{ title: { contains: query, mode: "insensitive" } }, { revisions: { some: { content: { contains: query, mode: "insensitive" } } } }]とし、タイトル・本文(いずれかのRevision)のどちらかに一致すればヒットする設計。過去の改訂内容に一致した場合でも、記事自体(最新の状態)がヒットしたものとして一覧に表示される
+
+**設計判断:HTML標準form送信との比較検討**
+- 検索フォームの実装方式として、①Client Component + router.pushによるクライアントサイド遷移と、②HTML標準の<form action="..." method="GET">によるブラウザ標準送信の2案を比較検討した
+- 機能要件(単純なキーワード送信と画面遷移)だけを見れば②の方がシンプルで、JavaScript不要・コード量も少なく済むという結論に至った
+- 最終的には①を採用。理由は、他の画面遷移(<Link>を使ったクライアントサイドナビゲーション)との一貫性を保てること、将来的にリアルタイムサジェスト等の機能を拡張しやすいことの2点。「必要最小限か」という観点では②が優れるが、「将来の拡張性」を重視して①を選んだという、トレードオフを踏まえた判断
+**トラブルシューティング**
+- 検索してもヒットしない不具合が発生。切り分けのためconsole.logでデバッグしたが、当初出力が確認できなかった。原因はデバッグログを追加したファイルのフォルダ名を誤っていたためで、単純な作業ミスだった
+- Prisma Studio上で同条件のデータ絞り込みができることを確認し、データ自体やDB接続には問題がないことを先に切り分けてから、コード側(クエリの組み立て・パラメータの受け渡し)の調査に進むという手順を踏んだ
+**運用ミス:developブランチで直接作業してしまった件**
+- 検索機能一式の実装・コミットを、誤ってfeature/searchではなくdevelopブランチ上で直接行ってしまった
+- リモート(origin/develop)へは未pushの状態だったため、以下の手順で復旧した
+- 今のdevelop(コミット済みの変更を含む)からfeature/searchブランチを新規に切る(git checkout -b feature/search)。これにより変更内容はそのまま新しいブランチに引き継がれる
+- developに戻り、git reset --hard origin/developでリモートの状態に強制的に巻き戻す(ローカルのみの変更を破棄)
+feature/searchをリモートにpush
