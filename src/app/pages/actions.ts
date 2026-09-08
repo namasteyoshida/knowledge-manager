@@ -31,3 +31,13 @@ export async function updatePage(pageId: string, content: string, authorId: stri
   revalidatePath(`/pages/${pageId}`);
   revalidatePath("/pages");
 }
+
+export async function deletePage(pageId: string) {
+  await prisma.page.update({
+    where: { id: pageId },
+    data: { deletedAt: new Date() },
+  });
+
+  revalidatePath("/pages");
+  revalidatePath(`/pages/${pageId}`);
+}
