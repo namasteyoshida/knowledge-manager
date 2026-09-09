@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createPageFromTemplate } from "./actions";
 import { composeTemplateMarkdown } from "@/lib/templateContent";
-import { markdownToHtml } from "@/lib/markdown";
+import { MarkdownField } from "./MarkdownField";
+import { MarkdownPreview } from "./MarkdownPreview";
 
 type User = { id: string; name: string };
 
@@ -17,19 +18,12 @@ export function DocumentTemplateForm({ users }: { users: User[] }) {
   const [causePoint, setCausePoint] = useState("");
   const [actionSteps, setActionSteps] = useState("");
   const [notesSummary, setNotesSummary] = useState("");
-  const [previewHtml, setPreviewHtml] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const markdown = composeTemplateMarkdown({
-      conclusion, backgroundIssue, causePoint, actionSteps, notesSummary,
-    });
-    const timer = setTimeout(() => {
-      markdownToHtml(markdown).then(setPreviewHtml);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [conclusion, backgroundIssue, causePoint, actionSteps, notesSummary]);
+  const composedMarkdown = composeTemplateMarkdown({
+    conclusion, backgroundIssue, causePoint, actionSteps, notesSummary,
+  });
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -70,66 +64,35 @@ export function DocumentTemplateForm({ users }: { users: User[] }) {
       </select>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">1. 結論</label>
-            <textarea
-              value={conclusion}
-              onChange={(e) => setConclusion(e.target.value)}
-              rows={2}
-              placeholder={"○○について、最も重要な点は△△です。"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <MarkdownField value={conclusion} onChange={setConclusion} rows={2}
+              placeholder="○○について、最も重要なポイントは△△です。" />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">2. 背景・課題</label>
-            <textarea
-              value={backgroundIssue}
-              onChange={(e) => setBackgroundIssue(e.target.value)}
-              rows={5}
-              placeholder={"なぜこのナレッジが必要になったのか、\nどのような状況・課題があったのかを説明します。"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <MarkdownField value={backgroundIssue} onChange={setBackgroundIssue} rows={3}
+              placeholder={"なぜこのナレッジが必要になったのか、\nどのような状況・課題があったのかを説明します。"} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">3. 原因・ポイント</label>
-            <textarea
-              value={causePoint}
-              onChange={(e) => setCausePoint(e.target.value)}
-              rows={3}
-              placeholder={"問題が発生した理由や、\n知っておくべき重要なポイントを説明します。"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <MarkdownField value={causePoint} onChange={setCausePoint} rows={3}
+              placeholder={"問題が発生した理由や、\n知っておくべき重要なポイントを説明します。"} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">4. 対応方法・手順</label>
-            <textarea
-              value={actionSteps}
-              onChange={(e) => setActionSteps(e.target.value)}
-              rows={5}
-              placeholder={"以下の手順で対応します。\n① ○○する\n② △△する\n③ □□する"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <MarkdownField value={actionSteps} onChange={setActionSteps} rows={4}
+              placeholder={"以下の手順で対応します。\n① ○○する\n② △△する\n③ □□する"} />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">5. 注意点・まとめ</label>
-            <textarea
-              value={notesSummary}
-              onChange={(e) => setNotesSummary(e.target.value)}
-              rows={3}
-              placeholder={"・○○に注意する\n・△△の場合は□□する\n・最も重要なのは○○"}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            />
+            <MarkdownField value={notesSummary} onChange={setNotesSummary} rows={3}
+              placeholder={"・○○に注意する\n・△△の場合は□□する\n・最も重要なのは○○"} />
           </div>
         </div>
 
-        <div className="prose prose-sm max-w-none rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-          {previewHtml ? (
-            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-          ) : (
-            <p className="text-sm text-gray-400">プレビューがここに表示されます</p>
-          )}
-        </div>
+        <MarkdownPreview content={composedMarkdown} />
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
