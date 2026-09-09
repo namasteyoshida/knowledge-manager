@@ -143,3 +143,32 @@
 - 今のdevelop(コミット済みの変更を含む)からfeature/searchブランチを新規に切る(git checkout -b feature/search)。これにより変更内容はそのまま新しいブランチに引き継がれる
 - developに戻り、git reset --hard origin/developでリモートの状態に強制的に巻き戻す(ローカルのみの変更を破棄)
 feature/searchをリモートにpush
+
+## 2026-09-09(Day4)
+
+### feature/document-template
+
+**設計の変遷**
+
+1. 当初、資料構成支援機能はGamma連携(ストレッチ機能)の入力補助として着想したが、Gamma自体が「テキストを入力するだけで自動構成する」機能を持つため、独自のテンプレート編集UIを作り込むことの投資対効果を再検討した
+2. MVPとストレッチを切り分け、「テンプレート入力→保存・表示までを行う機能(13-1)」をMVP必須、「Gamma連携(13-2)」をストレッチとする方針を決定
+3. 画面設計段階では仮の4セクション(概要/背景/詳細/まとめ)でワイヤーフレーム・API設計を先行させた
+4. 実際の業務利用を想定し、より実用的な5セクション構成(結論/背景・課題/原因・ポイント/対応方法・手順/注意点・まとめ)に内容を作り込み直した
+5. 「入力し始めたら例文が自動で消える」「テンプレートを使わない人にも配慮したい」という希望から入力方式を検討し、方法A(セクションごとの入力欄+HTML標準`placeholder`)と方法B(1つのエディタ+挿入ボタン)を比較。自動消去が可能な方法Aを採用し、「使わない人向け」への配慮は"モード切り替え"(`NewPageSwitcher`)で解決する方針に決定
+6. `/pages/new-from-template`という専用ページは廃止し、`/pages/new`に「自由入力」「テンプレート入力」の切り替えとして統合
+7. プレビュー機能追加時、保存用ロジックとプレビュー用ロジックが将来ズレるリスクを避けるため、Markdown組み立て処理を`composeTemplateMarkdown`として`lib/`配下に共通化
+
+**メインロジック**
+
+- `composeTemplateMarkdown`:5つのセクション値を受け取り、見出し付きMarkdown文字列1本に組み立てる純粋関数。サーバー側の保存処理(`createPageFromTemplate`)とクライアント側のプレビュー処理の両方から呼ばれる、単一の情報源として設計
+- `createPageFromTemplate`は内部で`composeTemplateMarkdown`→`createPage`(自由記述と共通のServer Action)という順に処理を委譲する構成。「保存」より後ろの処理は自由記述モードと完全に共通
+
+**リファクタリング:Markdown編集機能の再設計(react-hooks/refs対応)**
+
+- 発端:テンプレートの5セクションにツールバーを追加する際、`useMarkdownToolbar`というカスタムフックで`ref`と`insertSyntax`を返す設計にしたところ、`react-hooks/refs`というESLintルールに抵触した
+- 原因分析:「`ref`を保持するロジック(フック)」と「そのrefを使うUI(textarea)」が別コンポーネントに分かれ、`insertSyntax`がコンポーネントをまたいで渡されることで、ESLintの静的解析が安全性を追跡できなくなっていた
+- 誤った対処の経緯:最初にclaudeに「`useCallback`で包めば解決する」という説明を受けたが誤りだった(`useCallback`は関数の再生成を防ぐだけで、ref参照の構造自体は変わらない)。chatGPTへの確認により誤りを認識し、方針を修正した
+- 採用しなかった対処:ESLint抑制コメントによる警告の無効化は構造上の問題を覆い隠すだけであり根本対応にならないため不採用
+- 最終設計:`ref`・`textarea`・挿入処理(`useCallback`で定義)を`MarkdownField`という1つのコンポーネントに閉じ込め、`MarkdownToolbar`へは「ローカルで定義したコールバック関数」を渡す構成に変更。Reactで最も標準的な「親から子へイベントハンドラを渡す」パターンであり、ESLintの静的解析とも整合する
+- 責務分担を明確化:`MarkdownToolbar`(ボタン表示+通知のみ)/`MarkdownField`(textarea+ref+挿入処理)/`MarkdownPreview`(Markdown→HTML変換+表示)の3コンポーネントに整理。自由記述モード(`PageForm`)とテンプレートモード(`DocumentTemplateForm`、5セクション分)の両方で同じ3コンポーネントを再利用する構成にした
+- 文字列操作ロジック(`applyMarkdownSyntax`)をDOM操作から分離し、`lib/markdownSyntax.ts`に純粋関数として切り出した
