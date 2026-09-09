@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { composeTemplateMarkdown } from "@/lib/templateContent";
 import { revalidatePath } from "next/cache";
 
 export async function createPage(title: string, content: string, authorId: string) {
@@ -40,4 +41,22 @@ export async function deletePage(pageId: string) {
 
   revalidatePath("/pages");
   revalidatePath(`/pages/${pageId}`);
+}
+
+export async function createPageFromTemplate(
+  title: string,
+  sections: {
+    conclusion: string;
+    backgroundIssue: string;
+    causePoint: string;
+    actionSteps: string;
+    notesSummary: string;
+  },
+  authorId: string
+) {
+  if (!title.trim()) throw new Error("タイトルを入力してください");
+  if (!authorId) throw new Error("著者を選択してください");
+
+  const content = composeTemplateMarkdown(sections);
+  return createPage(title, content, authorId);
 }
