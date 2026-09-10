@@ -172,3 +172,73 @@ feature/searchをリモートにpush
 - 最終設計:`ref`・`textarea`・挿入処理(`useCallback`で定義)を`MarkdownField`という1つのコンポーネントに閉じ込め、`MarkdownToolbar`へは「ローカルで定義したコールバック関数」を渡す構成に変更。Reactで最も標準的な「親から子へイベントハンドラを渡す」パターンであり、ESLintの静的解析とも整合する
 - 責務分担を明確化:`MarkdownToolbar`(ボタン表示+通知のみ)/`MarkdownField`(textarea+ref+挿入処理)/`MarkdownPreview`(Markdown→HTML変換+表示)の3コンポーネントに整理。自由記述モード(`PageForm`)とテンプレートモード(`DocumentTemplateForm`、5セクション分)の両方で同じ3コンポーネントを再利用する構成にした
 - 文字列操作ロジック(`applyMarkdownSyntax`)をDOM操作から分離し、`lib/markdownSyntax.ts`に純粋関数として切り出した
+
+---
+
+## 2026-09-09(Day5):Vercelデプロイ
+
+### mainブランチへのマージ(インシデント対応)
+
+**問題**
+
+- develop→mainのPR作成時、コンフリクトが発生し「This branch has conflicts that must be resolved」と表示されマージできなかった
+- 原因は、以前(Day3)の「feature/page-detailを誤ってmainにマージし、`git revert -m 1`で打ち消した」事故により、main側の該当ファイル(`page.tsx`, `actions.ts`等)が古い状態のまま止まっていたこと。developはその後も機能追加を続けていたため、2つのブランチの履歴が食い違い、同一ファイルに対する矛盾した変更としてコンフリクトが発生した
+
+**対応**
+
+- `git merge develop`実行後、コンフリクトしたファイルに対して`git checkout --theirs <ファイル>`でdevelop側の内容を採用
+- `git commit -m "..."`でマージコミットを確定(コンテナ内にエディタがないため`-m`オプションでメッセージを直接指定)
+- `git push origin main`でリモートに反映
+
+**学習内容**
+
+- `git merge`時のコンフリクト解消で、`--theirs`(マージしようとしている側を採用)/`--ours`(現在のブランチ側を維持)というオプションで、ファイル単位で一括して解消方針を指定できる
+- 過去の`revert`が、離れたタイミングで別のマージ作業に影響を及ぼすことがあるという教訓(mainとdevelopの乖離は早期に解消しておく方が望ましい)
+
+
+**問題**
+
+- develop→mainのPR作成時、コンフリクトが発生し「This branch has conflicts that must be resolved」と表示されマージできなかった
+- 原因は、以前(Day3)の「feature/page-detailを誤ってmainにマージし、`git revert -m 1`で打ち消した」事故により、main側の該当ファイル(`page.tsx`, `actions.ts`等)が古い状態のまま止まっていたこと。developはその後も機能追加を続けていたため、2つのブランチの履歴が食い違い、同一ファイルに対する矛盾した変更としてコンフリクトが発生した
+
+**対応**
+
+- `git merge develop`実行後、コンフリクトしたファイルに対して`git checkout --theirs <ファイル>`でdevelop側の内容を採用
+- `git commit -m "..."`でマージコミットを確定(コンテナ内にエディタがないため`-m`オプションでメッセージを直接指定)
+- `git push origin main`でリモートに反映
+
+**学習内容**
+
+- `git merge`時のコンフリクト解消で、`--theirs`(マージしようとしている側を採用)/`--ours`(現在のブランチ側を維持)というオプションで、ファイル単位で一括して解消方針を指定できる
+- 過去の`revert`が、離れたタイミングで別のマージ作業に影響を及ぼすことがあるという教訓(mainとdevelopの乖離は早期に解消しておく方が望ましい)
+
+### Vercelへの初回デプロイ
+
+**メインロジック・構成**
+
+- ローカルの`DATABASE_URL`(Docker PostgreSQL)とVercel側の`DATABASE_URL`(Neon PostgreSQL)を、環境ごとに完全に分離する構成にした。ローカルの`.env`は変更せず、Vercel側の環境変数のみNeonの接続文字列を設定
+- GitHubリポジトリとVercelを連携し、mainブランチへのpushで自動デプロイされる構成にした
+
+**トラブルシューティング1:`Module not found`(Prisma Client生成漏れ)**
+
+- Vercelのビルドが`src/lib/prisma.ts`のimport元(`@/generated/prisma/client`)を解決できず失敗
+- 原因:`@prisma/client`のインストール時に`prisma generate`を自動実行する`postinstall`スクリプトが、pnpmのセキュリティ機構(ビルドスクリプトのブロック)によりVercel環境では実行されていなかった。ローカルでは`pnpm approve-builds --all`を既に実行済みだったため気づきにくかった
+- 対応:`package.json`の`build`コマンドを`"next build"`から`"prisma generate && next build"`に変更し、ビルドのたびに明示的にPrisma Clientを生成するようにした
+
+**トラブルシューティング2:`DriverAdapterError: TableDoesNotExist`**
+
+- Prisma Client生成の問題を解消した後、今度は「Neon側にPageテーブルが存在しない」エラーが発生
+- 原因:`schema.prisma`はDBの構造を定義するだけであり、実際にテーブルを作成するには`migrate`の適用が別途必要という原則が、「ローカルDBとNeon(本番用DB)という2つの独立したデータベース」という形で改めて表面化した。ローカルでは`migrate dev`を実行済みだったが、Neon側には一度も反映していなかった
+- 対応:ターミナル上で一時的に`DATABASE_URL`をNeonの接続文字列に切り替え、`pnpm prisma migrate deploy`を実行(`migrate dev`ではなく、既存のマイグレーションファイルを本番へ適用する専用コマンドを使用)。適用後、正常にテーブルが作成され解消
+
+**Deployment Protectionの実地確認**
+
+- Vercelの「ログインが必要です」設定(Vercel Authentication)をONにし、第三者(友人)に本番URLを共有
+- 友人がアクセスすると認証画面が表示され、アクセス要求→本人側での承認、というフローを実際に確認できた。要件定義書・設計書で想定していた「認証機能を実装しない代わりのアクセス制御」が、実際に機能することを検証できた
+
+**今後の運用における注意点(学習内容としてまとめ)**
+
+- `schema.prisma`を変更した際は、ローカルの`migrate dev`だけでなく、Neon(本番)側にも`migrate deploy`を忘れず適用する必要がある。特に今後のGamma連携(GenerationRequestテーブル追加)で同じ手順が必要になる
+- 新しい環境変数(例:今後追加予定の`GAMMA_API_KEY`)は、ローカルの`.env`だけでなくVercel側のEnvironment Variablesにも同様に設定する必要がある
+- 新しいnpmパッケージ追加時、`postinstall`等のビルドスクリプトに依存するパッケージだと、pnpmのセキュリティ機構により同様の問題が再発する可能性があるため、Vercel上のビルドログを都度確認する習慣が必要
+- developへのマージだけではVercelに反映されない(Vercelが追跡しているのはmainブランチ)。develop→mainのマージを、ある程度まとまった単位で忘れずに行う運用を継続する
