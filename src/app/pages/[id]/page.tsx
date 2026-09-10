@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { markdownToHtml } from "@/lib/markdown";
+import { DeleteButton } from "./DeleteButton";
 
 export default async function PageDetail({
   params,
@@ -28,19 +29,22 @@ export default async function PageDetail({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6 flex items-start justify-between">
+            <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{page.title}</h1>
           <p className="mt-1 text-sm text-gray-500">
             著者:{latest.author.name}・更新:{page.updatedAt.toLocaleDateString("ja-JP")}
           </p>
         </div>
-        <a
-          href={`/pages/${page.id}/edit`}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-        >
-          編集
-        </a>
+        <div className="flex gap-2">
+          <a
+            href={`/pages/${page.id}/edit`}
+            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            編集
+          </a>
+          <DeleteButton pageId={page.id} />
+        </div>
       </div>
 
       <article
