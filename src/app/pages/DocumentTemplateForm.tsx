@@ -25,23 +25,37 @@ export function DocumentTemplateForm({ users }: { users: User[] }) {
     conclusion, backgroundIssue, causePoint, actionSteps, notesSummary,
   });
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    try {
-      const page = await createPageFromTemplate(
-        title,
-        { conclusion, backgroundIssue, causePoint, actionSteps, notesSummary },
-        authorId
-      );
-      router.push(`/pages/${page.id}`);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
+  // canSubmitの定義を追加、handleSubmitとbuttonを修正
+const canSubmit =
+  title.trim() !== "" &&
+  authorId !== "" &&
+  conclusion.trim() !== "" &&
+  backgroundIssue.trim() !== "" &&
+  causePoint.trim() !== "" &&
+  actionSteps.trim() !== "" &&
+  notesSummary.trim() !== "";
+
+async function handleSubmit(e: FormEvent) {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
+  try {
+    const result = await createPageFromTemplate(
+      title,
+      { conclusion, backgroundIssue, causePoint, actionSteps, notesSummary },
+      authorId
+    );
+    if (result.error) {
+      setError(result.error);
+      return;
     }
+    router.push(`/pages/${result.page!.id}`);
+  } catch {
+    router.push("/unexpected-error");
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -99,7 +113,7 @@ export function DocumentTemplateForm({ users }: { users: User[] }) {
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={!canSubmit || loading}
         className="self-start rounded-md bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
       >
         {loading ? "作成中..." : "記事として保存"}
