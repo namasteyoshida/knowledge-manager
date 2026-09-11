@@ -60,3 +60,50 @@ export async function createPageFromTemplate(
   const content = composeTemplateMarkdown(sections);
   return createPage(title, content, authorId);
 }
+
+import { documentGenerator } from "@/lib/document-generator";
+
+export async function requestGammaGeneration(
+  inputText: string,
+  userId: string,
+  pageId?: string
+) {
+  if (!inputText.trim() || !userId) {
+    return { error: "内容と実行者は必須です。" };
+  }
+
+  const request = await prisma.generationRequest.create({
+    data: {
+      pageId: pageId ?? null,
+      userId,
+      inputText,
+      status: "PENDING",
+    },
+  });
+
+  // 生成処理は待たずに開始し、リクエストIDだけ先に返す(非同期処理)
+  processGeneration(request.id, inputText);
+
+  return { requestId: request.id };
+}
+
+// バックグラウンドで実行される生成処理(呼び出し元には結果を待たせない)
+async function processGeneration(requestId: string, inputText: string) {
+  await prisma.generationRequest.update({
+    where: { id: requestId },
+    data: { status: "PROCESSING" },
+  });
+
+  try {
+    const { resultUrl } = await documentGenerator.generate(inputText);
+    await prisma.generationRequest.update({
+      where: { id: requestId },
+      data: { status: "COMPLETED", resultUrl },
+    });
+  } catch (err) {
+    await prisma.generationRequest.update({
+      where: { id: requestId },
+      data: { status: "FAILED", errorMessage: (err as Error).message },
+    });
+  }
+}
