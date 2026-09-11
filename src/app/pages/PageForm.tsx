@@ -20,20 +20,34 @@ export function PageForm(props: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const canSubmit =
+    props.mode === "create"
+      ? title.trim() !== "" && content.trim() !== "" && authorId !== ""
+      : content.trim() !== "" && authorId !== "";
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
       if (props.mode === "create") {
-        const page = await createPage(title, content, authorId);
-        router.push(`/pages/${page.id}`);
+        const result = await createPage(title, content, authorId);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        router.push(`/pages/${result.page!.id}`);
       } else {
-        await updatePage(props.pageId, content, authorId);
+        const result = await updatePage(props.pageId, content, authorId);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
         router.push(`/pages/${props.pageId}`);
       }
-    } catch (err) {
-      setError((err as Error).message);
+    } catch {
+      // バリデーション以外の予期しないエラー(DB接続断など)
+      router.push("/unexpected-error");
     } finally {
       setLoading(false);
     }
@@ -72,8 +86,8 @@ export function PageForm(props: Props) {
 
       <button
         type="submit"
-        disabled={loading}
-        className="self-start rounded-md bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700 disabled:opacity-50"
+        disabled={!canSubmit || loading}
+        className="self-start rounded-md bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {loading ? "保存中..." : "保存"}
       </button>

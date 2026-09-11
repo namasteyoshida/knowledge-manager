@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 
 export async function createPage(title: string, content: string, authorId: string) {
   if (!title || !content || !authorId) {
-    throw new Error("タイトル、本文、著者は必須です。");
+    return { error: "タイトル、本文、著者は必須です。" };
   }
   const page = await prisma.page.create({
     data: {
@@ -15,12 +15,12 @@ export async function createPage(title: string, content: string, authorId: strin
     },
   });
   revalidatePath("/pages");
-  return page;
+  return { page };
 }
 
 export async function updatePage(pageId: string, content: string, authorId: string) {
   if (!content || !authorId) {
-    throw new Error("本文と著者は必須です。");
+    return { error: "本文と著者は必須です。" };
   }
   await prisma.revision.create({
     data: { pageId, content, authorId },
@@ -31,6 +31,7 @@ export async function updatePage(pageId: string, content: string, authorId: stri
   });
   revalidatePath(`/pages/${pageId}`);
   revalidatePath("/pages");
+  return { success: true as const };
 }
 
 export async function deletePage(pageId: string) {
@@ -38,7 +39,6 @@ export async function deletePage(pageId: string) {
     where: { id: pageId },
     data: { deletedAt: new Date() },
   });
-
   revalidatePath("/pages");
   revalidatePath(`/pages/${pageId}`);
 }
@@ -54,9 +54,9 @@ export async function createPageFromTemplate(
   },
   authorId: string
 ) {
-  if (!title.trim()) throw new Error("タイトルを入力してください");
-  if (!authorId) throw new Error("著者を選択してください");
-
+  if (!title.trim() || !authorId) {
+    return { error: "タイトルと著者は必須です。" };
+  }
   const content = composeTemplateMarkdown(sections);
   return createPage(title, content, authorId);
 }
