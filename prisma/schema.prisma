@@ -24,6 +24,7 @@ model User {
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
   revisions    Revision[]
+  generationRequests GenerationRequest[]
 }
 
 model Page {
@@ -33,6 +34,7 @@ model Page {
   updatedAt DateTime   @updatedAt
   deletedAt DateTime?
   revisions Revision[]
+  generationRequests GenerationRequest[]
 }
 
 model Revision {
@@ -43,4 +45,25 @@ model Revision {
   author    User     @relation(fields: [authorId], references: [id])
   content   String
   createdAt DateTime @default(now())
+}
+
+model GenerationRequest {
+  id           String        @id @default(cuid())
+  pageId       String?
+  page         Page?         @relation(fields: [pageId], references: [id])
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  inputText    String
+  status       RequestStatus @default(PENDING)
+  resultUrl    String?
+  errorMessage String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+enum RequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
