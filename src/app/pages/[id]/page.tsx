@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { markdownToHtml } from "@/lib/markdown";
 import { DeleteButton } from "./DeleteButton";
+import { GammaGenerationButton } from "../GammaGenerationButton";
 
 export default async function PageDetail({
   params,
@@ -44,6 +45,7 @@ export default async function PageDetail({
             編集
           </a>
           <DeleteButton pageId={page.id} />
+          <GammaGenerationButton inputText={latest.content} userId={latest.authorId} pageId={page.id} />
         </div>
       </div>
 
