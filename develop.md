@@ -242,3 +242,49 @@ feature/searchをリモートにpush
 - 新しい環境変数(例:今後追加予定の`GAMMA_API_KEY`)は、ローカルの`.env`だけでなくVercel側のEnvironment Variablesにも同様に設定する必要がある
 - 新しいnpmパッケージ追加時、`postinstall`等のビルドスクリプトに依存するパッケージだと、pnpmのセキュリティ機構により同様の問題が再発する可能性があるため、Vercel上のビルドログを都度確認する習慣が必要
 - developへのマージだけではVercelに反映されない(Vercelが追跡しているのはmainブランチ)。develop→mainのマージを、ある程度まとまった単位で忘れずに行う運用を継続する
+
+---
+
+## 2026-09-11(Day6):Gamma連携(ストレッチ機能)
+
+### 方針決定
+
+**設計判断**
+
+- Gamma APIの利用には有料プラン(Pro/Ultra/Teams/Business)が必要と判明。有料プランには加入せず、以下の方針で実装することを決定した
+  - API連携を想定した設計・実装(テーブル、Server Action、ポーリング機構)は本物と同じ構造で作る
+  - 実際のAPI呼び出しは`DocumentGenerator`インターフェースで抽象化し、動作確認用の`MockGenerator`で代替する
+  - 実際の生成クオリティは、gamma.appの無料枠に手動でテキストを貼り付けて別途検証する
+
+**Gamma API仕様調査の結果**
+
+- 認証:`X-API-KEY`ヘッダーにAPIキーを設定
+- 生成フロー:`POST /v1.0/generations`で生成開始→`generationId`取得→`GET /v1.0/generations/{generationId}`を5秒間隔でポーリング→`status`が`completed`になれば`gammaUrl`(閲覧リンク)・`exportUrl`(PDF/PPTX等)を取得
+- このAPI設計が、以前設計していた`GenerationRequest`テーブルの`status`管理・ポーリング方式とほぼ一致しており、設計の妥当性を裏付ける結果となった
+
+### メインロジック
+
+**`DocumentGenerator`抽象化レイヤー**
+
+- `DocumentGenerator`インターフェース(`generate(inputText): Promise<{ resultUrl }>`)を定義し、`MockGenerator`(3秒遅延+ダミーURL返却)と`GammaGenerator`(本物のAPI呼び出し、未検証の雛形)の2つの実装を用意
+- 実際に使う実装は`document-generator/index.ts`の1行(`export const documentGenerator = new MockGenerator()`)で切り替えられる構成にした。将来有料プランを契約した場合、呼び出し側のコードを一切変更せずに本番切り替えが可能
+
+**非同期処理の設計**
+
+- `requestGammaGeneration`は、DBへのリクエスト登録(`status: PENDING`)のみを行い、実際の生成処理(`processGeneration`)は`await`せずに呼び出す設計にした。これにより、呼び出し元(クライアント)は生成完了を待たされず、即座に`requestId`を受け取れる
+- `processGeneration`はバックグラウンドで`status`をPENDING→PROCESSING→COMPLETED/FAILEDと更新し続け、生成結果(`resultUrl`)またはエラー内容(`errorMessage`)をDBに書き込む
+- クライアント側は`GammaGenerationButton`コンポーネントで2秒間隔のポーリング(`setInterval`)を行い、`useRef`でタイマーIDを保持してコンポーネントのアンマウント時に確実に`clearInterval`する設計にした(ポーリングの残留によるメモリリーク防止)
+
+**確認ダイアログの追加**
+
+- 要件定義書4.3(非機密情報を扱う運用ルール)を踏まえ、生成ボタン押下時に`window.confirm`で「機密情報が含まれていないか」の確認を挟む設計を追加した。削除ボタンと同じ、誤操作・不用意な実行防止の考え方を踏襲している
+
+### 設計上の疑問への回答:GammaGenerator内のthrowは問題ないか
+
+- 以前`createPage`等で「Server Actionからのthrowは本番ビルドでクライアントに伝わらない」問題を修正した経緯があったため、`GammaGenerator`内の`throw`も同様に問題にならないか確認した
+- 結論:問題ない。`GammaGenerator.generate()`のthrowは、同じサーバープロセス内の`processGeneration`のtry/catchでのみ受け止められ、DBの`errorMessage`に書き込まれた後、Route Handler経由で正常なJSONレスポンスとしてクライアントに届く。クライアントの`try/catch`に直接届こうとする経路(以前問題になった構造)がそもそも存在しないため、throwのままで設計として適切と判断した
+
+### 実機検証:gamma.app無料枠での手動確認
+
+- 実際にシステムから送信されるであろう`inputText`(Markdown形式の記事本文)を、自由記述形式・5セクションテンプレート形式の2パターン用意し、gamma.appの無料枠に手動で貼り付けて検証した
+- 見出し(`##`)・番号付き構成・箇条書きを含むテキストが、Gamma側で正しく構造化されたスライド/ドキュメントとして変換されることを確認した。前処理でMarkdown記号を除去する必要がないという設計上の判断が裏付けられた
