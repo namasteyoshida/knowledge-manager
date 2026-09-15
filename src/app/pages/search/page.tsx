@@ -10,21 +10,10 @@ export default async function SearchPage({
   const { q } = await searchParams;
   const query = q ?? "";
 
-  const pages = query
-    ? await prisma.page.findMany({
-        where: {
-          deletedAt: null,
-          OR: [
-            { title: { contains: query, mode: "insensitive" } },
-            { revisions: { some: { content: { contains: query, mode: "insensitive" } } } },
-          ],
-        },
-        orderBy: { updatedAt: "desc" },
-        include: {
-          revisions: { orderBy: { createdAt: "desc" }, take: 1, include: { author: true } },
-        },
-      })
-    : [];
+  let pages: Awaited<ReturnType<typeof fetchMatchedPages>> = [];
+  if (query) {
+    pages = await fetchMatchedPages(query);
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
@@ -64,4 +53,32 @@ export default async function SearchPage({
       )}
     </div>
   );
+}
+
+// 「タイトル」または「最新Revisionの本文」に一致する記事のみを検索対象とする。
+// Prismaの標準的なwhere句だけでは「各Pageの最新Revisionに限定した検索」を
+// 直接表現できないため、対象記事(削除済みを除く)を最新Revision付きで取得した上で、
+// アプリケーション側でタイトル・最新本文への部分一致を判定する。
+async function fetchMatchedPages(query: string) {
+  const lowerQuery = query.toLowerCase();
+
+  const candidates = await prisma.page.findMany({
+    where: { deletedAt: null },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      revisions: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        include: { author: true },
+      },
+    },
+  });
+
+  return candidates.filter((page) => {
+    const latestContent = page.revisions[0]?.content ?? "";
+    return (
+      page.title.toLowerCase().includes(lowerQuery) ||
+      latestContent.toLowerCase().includes(lowerQuery)
+    );
+  });
 }
