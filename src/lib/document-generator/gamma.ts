@@ -7,7 +7,6 @@ export class GammaGenerator implements DocumentGenerator {
       throw new Error("GAMMA_API_KEYが設定されていません");
     }
 
-    // 1. 生成を開始する
     const createRes = await fetch("https://public-api.gamma.app/v1.0/generations", {
       method: "POST",
       headers: {
@@ -27,8 +26,11 @@ export class GammaGenerator implements DocumentGenerator {
 
     const { generationId } = await createRes.json();
 
-    // 2. 完了するまでポーリング(5秒間隔)
-    while (true) {
+    // 5秒間隔 × 最大24回 = 最大2分でタイムアウトする
+    // (この値はGamma側の実際の生成時間を検証した上での数値ではなく、暫定値)
+    const MAX_ATTEMPTS = 24;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       const statusRes = await fetch(
@@ -43,7 +45,8 @@ export class GammaGenerator implements DocumentGenerator {
       if (statusData.status === "failed") {
         throw new Error("Gamma側での生成に失敗しました");
       }
-      // "processing"等の場合はループを継続
     }
+
+    throw new Error("Gamma側の生成がタイムアウトしました(2分経過)");
   }
 }
