@@ -22,13 +22,17 @@ export async function updatePage(pageId: string, content: string, authorId: stri
   if (!content || !authorId) {
     return { error: "本文と著者は必須です。" };
   }
-  await prisma.revision.create({
-    data: { pageId, content, authorId },
-  });
-  await prisma.page.update({
-    where: { id: pageId },
-    data: { updatedAt: new Date() },
-  });
+
+  await prisma.$transaction([
+    prisma.revision.create({
+      data: { pageId, content, authorId },
+    }),
+    prisma.page.update({
+      where: { id: pageId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
+
   revalidatePath(`/pages/${pageId}`);
   revalidatePath("/pages");
   return { success: true as const };
