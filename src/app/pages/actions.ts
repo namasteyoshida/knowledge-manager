@@ -39,12 +39,18 @@ export async function updatePage(pageId: string, content: string, authorId: stri
 }
 
 export async function deletePage(pageId: string) {
+  const page = await prisma.page.findUnique({ where: { id: pageId } });
+  if (!page || page.deletedAt) {
+    return { error: "対象の記事が見つかりません。" };
+  }
+
   await prisma.page.update({
     where: { id: pageId },
     data: { deletedAt: new Date() },
   });
   revalidatePath("/pages");
   revalidatePath(`/pages/${pageId}`);
+  return { success: true as const };
 }
 
 export async function createPageFromTemplate(
