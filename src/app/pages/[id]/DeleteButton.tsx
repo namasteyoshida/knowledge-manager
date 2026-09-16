@@ -9,17 +9,19 @@ export function DeleteButton({ pageId }: { pageId: string }) {
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
-    const confirmed = window.confirm("この記事を削除しますか?この操作は一覧・検索から見えなくなりますが、データは内部的に保持されます。");
+    const confirmed = window.confirm(
+      "この記事を削除しますか?この操作は一覧・検索から見えなくなりますが、データは内部的に保持されます。"
+    );
     if (!confirmed) return;
 
     setLoading(true);
-    try {
-      await deletePage(pageId);
-      router.push("/pages");
-    } catch (err) {
-      alert((err as Error).message);
+    const result = await deletePage(pageId);
+    if (result.error) {
+      alert(result.error);
       setLoading(false);
+      return;
     }
+    router.push("/pages");
   }
 
   return (
