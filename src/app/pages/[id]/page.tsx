@@ -11,30 +11,37 @@ export default async function PageDetail({
 }) {
   const { id } = await params;
 
-  const page = await prisma.page.findUnique({
-    where: { id },
-    include: {
-      revisions: {
-        orderBy: { createdAt: "desc" },
-        include: { author: true },
+  const [page, latestRevision, revisionHistory] = await Promise.all([
+    prisma.page.findUnique({ where: { id } }),
+    prisma.revision.findFirst({
+      where: { pageId: id },
+      orderBy: { createdAt: "desc" },
+      include: { author: true },
+    }),
+    prisma.revision.findMany({
+      where: { pageId: id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        createdAt: true,
+        author: { select: { name: true } },
       },
-    },
-  });
+    }),
+  ]);
 
-  if (!page || page.deletedAt) {
+  if (!page || page.deletedAt || !latestRevision) {
     notFound();
   }
 
-  const [latest] = page.revisions;
-  const html = await markdownToHtml(latest.content);
+  const html = await markdownToHtml(latestRevision.content);
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
-            <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold text-gray-900">{page.title}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            著者:{latest.author.name}・更新:{page.updatedAt.toLocaleDateString("ja-JP")}
+            著者:{latestRevision.author.name}・更新:{page.updatedAt.toLocaleDateString("ja-JP")}
           </p>
         </div>
         <div className="flex gap-2">
@@ -45,7 +52,7 @@ export default async function PageDetail({
             編集
           </a>
           <DeleteButton pageId={page.id} />
-          <GammaGenerationButton inputText={latest.content} userId={latest.authorId} pageId={page.id} />
+          <GammaGenerationButton inputText={latestRevision.content} userId={latestRevision.authorId} pageId={page.id} />
         </div>
       </div>
 
@@ -57,7 +64,7 @@ export default async function PageDetail({
       <h2 className="mt-8 mb-3 text-sm font-semibold text-gray-700">改訂履歴</h2>
       <table className="w-full text-sm">
         <tbody>
-          {page.revisions.map((rev) => (
+          {revisionHistory.map((rev) => (
             <tr key={rev.id} className="border-b border-gray-100">
               <td className="py-2 text-gray-500">
                 {rev.createdAt.toLocaleString("ja-JP")}
