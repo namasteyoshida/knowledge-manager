@@ -99,21 +99,26 @@ export async function requestGammaGeneration(
 
 // バックグラウンドで実行される生成処理(呼び出し元には結果を待たせない)
 async function processGeneration(requestId: string, inputText: string) {
-  await prisma.generationRequest.update({
-    where: { id: requestId },
-    data: { status: "PROCESSING" },
-  });
-
   try {
+    await prisma.generationRequest.update({
+      where: { id: requestId },
+      data: { status: "PROCESSING" },
+    });
+
     const { resultUrl } = await documentGenerator.generate(inputText);
+
     await prisma.generationRequest.update({
       where: { id: requestId },
       data: { status: "COMPLETED", resultUrl },
     });
   } catch (err) {
-    await prisma.generationRequest.update({
-      where: { id: requestId },
-      data: { status: "FAILED", errorMessage: (err as Error).message },
-    });
+    await prisma.generationRequest
+      .update({
+        where: { id: requestId },
+        data: { status: "FAILED", errorMessage: (err as Error).message },
+      })
+      .catch(() => {
+        console.error(`GenerationRequest ${requestId} の状態更新に失敗しました`, err);
+      });
   }
 }
